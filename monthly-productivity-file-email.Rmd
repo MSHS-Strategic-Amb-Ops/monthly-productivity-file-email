@@ -1,0 +1,63 @@
+---
+title: "monthly-productivity-file-email"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+
+library(blastula)
+library(rmarkdown)
+library(here)
+library(glue)
+library(lubridate)
+```
+
+
+```{r processing, include = FALSE}
+
+# source("Scripts/pull_and_process_monthly.R", local = knitr::knit_global())
+```
+
+```{r pressure, echo=FALSE}
+
+
+report_date <- format(Sys.Date() - months(1), "%B %Y")
+
+email_credential_location <- "/SharedDrive/deans/Presidents/HSPI-PM/Operations Analytics and Optimization/Administrative/Workgroups/R Workbench/Working Area/Data Connections/email_creds"
+cc_list <- c("soyoun.kweon@mssm.edu",
+             )
+send_list <- c("soyoun.kweon@mssm.edu"
+  )
+
+email_subject <- glue("Master Physician Productivity - {report_date}")
+
+sinai_logo <- add_image(file = "www/Mount_Sinai_Logo_H.png",
+                        width = 300)
+
+# Generate the footer text
+footer_text <- glue("Physician Productivity Data for {report_date}.")
+
+
+##Use blastula to construct email to send
+compose_email(header = sinai_logo,
+              body = render_email("Scripts/email_body.Rmd")$html_html,
+              footer = footer_text) %>%
+  add_attachment(
+    # file = "/nfs/data/Applications/Ambulatory/system_huddle_report.html",
+    # filename = paste0("System Huddle Report_2022_2023",".html")) %>%    
+    file = "/nfs/data/Applications/Ambulatory/master_productivity_data.xlsx",
+    filename = paste0("Master Physician Productivity Data_", report_date,".xlsx")) %>%
+  purrr::list_modify(html_str =
+                       .$html_str %>%
+                       stringr::str_replace_all(pattern = "(?i)#f6f6f6",
+                                                replacement = "#FFFFFF")) %>%
+  smtp_send(
+    from = "soyoun.kweon@mssm.edu",
+    to = send_list,
+    cc = cc_list,
+    credentials = creds_file(file = email_credential_location),
+    subject = email_subject
+  ) 
+
+```
