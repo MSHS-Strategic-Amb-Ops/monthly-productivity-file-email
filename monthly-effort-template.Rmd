@@ -1,0 +1,779 @@
+---
+title: "data-processing"
+output: html_document
+date: "2024-06-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Load Packages, echo = FALSE, warning = FALSE, message = FALSE}
+# # Load packages -----------------------------------------------------------------------------------
+suppressMessages({
+  memory.limit(size = 8000000)
+  library(readxl)
+  library(writexl)
+  library(plyr)
+  library(dplyr)
+  library(data.table)
+  library(zoo)
+  library(shiny)
+  library(shinydashboard)
+  library(shinydashboardPlus)
+  library(shinyWidgets)
+  library(htmlwidgets)
+  library(lubridate)
+  library(tcltk)
+  library(tidyverse)
+  library(plotly)
+  library(knitr)
+  library(kableExtra)
+  library(leaflet)
+  library(grid)
+  library(gridExtra)
+  library(eeptools)
+  library(ggQC)
+  library(zipcodeR)
+  library(utils)
+  library(scales)
+  library(chron)
+  library(bupaR)
+  library(shiny)
+  library(DT)
+  library(DiagrammeR)
+  library(shinyalert)
+  library(edeaR)
+  library(processmapR)
+  library(processmonitR)
+  library(processanimateR)
+  library(tidyr)
+  library(lubridate)
+  library(RColorBrewer)
+  library(DiagrammeR)
+  library(ggplot2)
+  library(leaflet)
+  library(readr)
+  library(highcharter)
+  library(ggforce) # for 'geom_arc_bar'
+  library(packcircles) # for packed circle graph
+  library(viridis)
+  library(ggiraph)
+  library(treemapify)
+  library(treemap)
+  library(broom)
+  library(extrafont)
+  library(tis) # for US holidays
+  library(vroom)
+  library(sjmisc)
+  library(tools)
+  library(here)
+  library(shinyBS)
+  library(shinyscreenshot)
+  library(fasttime)
+  library(shinycssloaders)
+  library(feather)
+  # library(zipcodeR)
+  library(formattable)
+  library(shinyjs)
+  library(janitor)
+  library(patchwork)
+  library(flexdashboard)
+  # library(tidyverse)
+  # library(viridis)
+  # library(hrbrthemes)
+  # ibrary(plotly)
+  # install.packages("bsts")
+  library(bsts)
+  library(reactable)
+  # install.packages("reactablefmtr")
+  library(reactablefmtr)
+  library(svDialogs)
+  # library(openxlsx)
+  library(flextable)
+  library(officedown)
+  library(officer)
+  library(magrittr)
+  library(webshot) 
+  library(png)
+  library(ggh4x)
+  library(RODBC)
+  library(DBI)
+  library(odbc)
+  library(dbplyr)
+  library(pool)
+  library(emojifont)
+})
+```
+
+
+
+```{r Global Variables, echo = FALSE, warning = FALSE, message = FALSE}
+
+'%!in%' <- function(x,y)!('%in%'(x,y))
+not_all_na <- function(x) any(!is.na(x))
+not_any_na <- function(x) all(!is.na(x))
+
+```
+
+
+```{r Set Columns, echo = FALSE, warning = FALSE, message = FALSE}
+
+prov_detail_cols <- c("MASTER_DEPT", "CPSC_SPECIALTY", "FINANCIAL_SITE", "PHYSICIAN", "NPI",                          
+                  "LIFE_NUM", "BUSINESS_UNIT", "HR_DEPARTMENT", "HR_PERSON_TYPE", "TYPE",                         
+                  "TYPE_DETAIL", "ADMIN_TITLE", "HIRE_DATE", "TERM_DATE")
+
+effort_cols <-  c("YEAR",                         
+                  "MONTH", "FTE", "ADJ_CFTE", "CLINICAL", "CLINICAL_RESIDENT",            
+                  "SERVICE", "SERVICE_RESIDENT", "NON_BILLABLE_OFFSITE_CLINICAL", "BILLABLE_OFFSITE_CLINICAL", "IP",                           
+                  "OR", "OP_MSBI", "OP_MSB", "OP_Chelsea", "OP_MSUS",                    
+                  "OP_MSDMG", "OP_MSH_FPA", "OP_MSH_AMB CARE", "OP_MSW", "OP_MSM",                       
+                  "OP_NYEE", "OP_MSSN", "OP_MSQ", "OP_NETWORK", "ADMIN_DEP_HOSP",               
+                  "ADMIN_RESIDENCY", "ADMIN_CLINICAL", "RESEARCH_FUNDED", "RESEARCH_UNFUNDED", "RESEARCH_INTRAMURAL_FUNDED",   
+                  "TEACHING", "FINAL_CATEGORY", "NOTES",                 
+                  "YEARMO") 
+
+numeric_cols <- c("FTE", "ADJ_CFTE", "CLINICAL", "CLINICAL_RESIDENT",            
+                  "SERVICE", "SERVICE_RESIDENT", "NON_BILLABLE_OFFSITE_CLINICAL", "BILLABLE_OFFSITE_CLINICAL", "IP",                           
+                  "OR", "OP_MSBI", "OP_MSB", "OP_Chelsea", "OP_MSUS",                    
+                  "OP_MSDMG", "OP_MSH_FPA", "OP_MSH_AMB CARE", "OP_MSW", "OP_MSM",                       
+                  "OP_NYEE", "OP_MSSN", "OP_MSQ", "OP_NETWORK", "ADMIN_DEP_HOSP",               
+                  "ADMIN_RESIDENCY", "ADMIN_CLINICAL", "RESEARCH_FUNDED", "RESEARCH_UNFUNDED", "RESEARCH_INTRAMURAL_FUNDED",   
+                  "TEACHING") 
+
+```
+
+
+```{r Import Data, echo = FALSE, warning = FALSE, message = FALSE}
+
+oracle_data <- read_excel(file.choose(), sheet = "Effort by Month")
+
+# Monthly Effort Changes Submitted 
+effort_submitted <- read_excel(file.choose())
+effort_submitted <- effort_submitted %>%
+  mutate(MONTH = ifelse(nchar(MONTH) == 1, paste0("0",MONTH), MONTH)) %>%
+  mutate(YEARMO = paste0(YEAR, MONTH),
+         LAST_UPDATED = Sys.Date()) 
+
+```
+
+
+```{r Update Master Provider Details, echo = FALSE, warning = FALSE, message = FALSE}
+
+old_prov_detail <- distinct(oracle_data[prov_detail_cols])
+new_prov_detail <- distinct(effort_submitted[prov_detail_cols])
+
+
+master_prov_detail <- bind_rows(old_prov_detail %>%
+                                  mutate(NPI = as.character(NPI)) %>%
+                                  filter(NPI %!in% new_prov_detail$NPI | LIFE_NUM %!in% new_prov_detail$LIFE_NUM),
+                                new_prov_detail %>%
+                                  mutate(TERM_DATE = as.character(TERM_DATE))) %>%
+  mutate(hire_org = HIRE_DATE,
+         term_org = TERM_DATE) %>%
+  mutate(HIRE_DATE = format(as.Date(hire_org , "%m/%d/%Y"), "%m/%d/%Y"),
+         TERM_DATE = format(as.Date(term_org, "%m/%d/%Y"), "%m/%d/%Y")) %>%
+  mutate(HIRE_DATE = ifelse(is.na(HIRE_DATE), format(as.Date(as.numeric(hire_org), origin="1899-12-30"), "%m/%d/%Y"), HIRE_DATE),
+         TERM_DATE = ifelse(is.na(TERM_DATE), format(as.Date(as.numeric(term_org), origin="1899-12-30"), "%m/%d/%Y"), TERM_DATE)) %>%
+  dplyr::select(-c(hire_org, term_org)) %>%
+  mutate(LAST_UPDATED = Sys.Date()) %>%
+  arrange(MASTER_DEPT, CPSC_SPECIALTY, NPI)
+
+```
+
+
+```{r Merge Historical and Submitted, echo = FALSE, warning = FALSE, message = FALSE}
+
+old_oracle <- oracle_data[c("MASTER_DEPT", "NPI", "LIFE_NUM", effort_cols)]
+new_oracle <- effort_submitted[c("MASTER_DEPT", "NPI", "LIFE_NUM", effort_cols)]
+
+
+# old_oracle <- bind_rows(oracle_data[c("MASTER_DEPT", "NPI", "LIFE_NUM", effort_cols)],
+#                         (monthly_effort_template %>% 
+#                            mutate(NPI = as.numeric(NPI)) %>%
+#                            mutate(YEARMO = paste0(YEAR, MONTH)))[c("MASTER_DEPT", "NPI", "LIFE_NUM", effort_cols)])
+  
+
+oracle_updated <- bind_rows(old_oracle %>%
+                              ungroup() %>%
+                              mutate(across(c("MASTER_DEPT", "NPI", "LIFE_NUM", "YEAR", "MONTH"), as.character)) %>%
+                              mutate(across(numeric_cols, as.numeric)) %>%
+                              filter(paste0(NPI, LIFE_NUM, YEARMO) %!in% paste0(new_oracle$NPI, new_oracle$LIFE_NUM, new_oracle$YEARMO)),
+                              new_oracle %>% 
+                              ungroup() %>%
+                              mutate(across(c("MASTER_DEPT", "NPI", "LIFE_NUM", "YEAR", "MONTH"), as.character)) %>%
+                              mutate(across(numeric_cols, as.numeric)))
+                              
+
+# Merge with Master Template 
+oracle_updated_merged <- full_join(master_prov_detail, oracle_updated)
+
+oracle_updated_merged <- oracle_updated_merged %>%
+  mutate(across(where(is.numeric), ~replace(., is.na(.), 0)))
+
+```
+
+
+```{r Master Physician Details and Effort Summary, echo = FALSE, warning = FALSE, message = FALSE}
+
+# Master Allocation of Effort by Month
+effort_repo_month <- oracle_updated_merged %>%
+  ungroup() %>%
+  arrange(MASTER_DEPT, PHYSICIAN, YEAR, MONTH) %>%
+  relocate(LAST_UPDATED, .after = YEARMO)
+
+
+# Master Allocation of Effort by Year
+effort_repo_year <- oracle_updated_merged %>%
+  dplyr::select(-c(FINAL_CATEGORY, NOTES))%>%
+  group_by(MASTER_DEPT, CPSC_SPECIALTY, FINANCIAL_SITE, PHYSICIAN, NPI, LIFE_NUM, BUSINESS_UNIT, HR_DEPARTMENT, HR_PERSON_TYPE, TYPE, TYPE_DETAIL, ADMIN_TITLE,
+           HIRE_DATE, TERM_DATE, YEAR) %>%
+  summarise_if(is.numeric, mean) %>%
+  mutate(LAST_UPDATED = Sys.Date()) %>%
+  arrange(MASTER_DEPT, PHYSICIAN, YEAR)
+
+
+## create a workbook and add a worksheet
+  wb <- createWorkbook()
+  
+  addWorksheet(wb, paste0("Roster"))
+  writeDataTable(wb, 1, master_prov_detail, startRow = 1, startCol = 1, tableStyle = "None", stack = T)
+  addStyle(wb, 1, createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = FALSE), 
+           rows = 1, 
+           cols = 1:length(master_prov_detail))
+  
+  
+  addWorksheet(wb, paste0("Effort by Year"))
+  writeDataTable(wb, 2, effort_repo_year, startRow = 1, startCol = 1, tableStyle = "None", stack = T)
+  addStyle(wb, 2, createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = FALSE), 
+           rows = 1, 
+           cols = 1:length(effort_repo_year))
+  groupColumns(wb, 2, cols = c(23:38), hidden = TRUE)
+  
+  
+  addWorksheet(wb, paste0("Effort by Month"))
+  writeDataTable(wb, 3, effort_repo_month, startRow = 1, startCol = 1, tableStyle = "None", stack = T)
+  addStyle(wb, 3, createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = FALSE), 
+           rows = 1, 
+           cols = 1:length(effort_repo_month))
+  groupColumns(wb, 3, cols = c(24:39), hidden = TRUE)
+
+  
+  # set zoom
+  set_zoom <- function(x) gsub('(?<=zoomScale=")[0-9]+', x, sV, perl = TRUE)
+  
+  sV <- wb$worksheets[[1]]$sheetViews
+  wb$worksheets[[1]]$sheetViews <- set_zoom(90)
+
+
+
+require(openxlsx)
+saveWorkbook(wb, paste0("~/monthly-productivity-file-email/effort-allocation-latest/Master Allocation of Effort_",format(Sys.Date(),"%m%d%y"),".xlsx"), overwrite = T)
+
+```
+
+
+```{r Create Effort Submission Template, echo = FALSE, warning = FALSE, message = FALSE}
+
+effort_submission_template <- oracle_updated_merged %>%
+  filter(is.na(TERM_DATE) | (as.Date(TERM_DATE, "%m/%d/%Y") > Sys.Date())) %>%
+  group_by(MASTER_DEPT, CPSC_SPECIALTY, FINANCIAL_SITE, PHYSICIAN, NPI, LIFE_NUM, BUSINESS_UNIT, HR_DEPARTMENT, HR_PERSON_TYPE, TYPE, TYPE_DETAIL, ADMIN_TITLE,
+           HIRE_DATE, TERM_DATE) %>%
+  slice(which.max(YEARMO)) %>%
+  dplyr::select(MASTER_DEPT, CPSC_SPECIALTY, FINANCIAL_SITE, PHYSICIAN, NPI, LIFE_NUM, BUSINESS_UNIT, HR_DEPARTMENT, HR_PERSON_TYPE, TYPE, TYPE_DETAIL, ADMIN_TITLE,
+           HIRE_DATE, TERM_DATE, YEAR, MONTH,
+           FTE, ADJ_CFTE, CLINICAL, CLINICAL_RESIDENT, SERVICE, SERVICE_RESIDENT, NON_BILLABLE_OFFSITE_CLINICAL, BILLABLE_OFFSITE_CLINICAL,
+           IP, OR, OP_MSBI, OP_MSB, OP_Chelsea, OP_MSUS, OP_MSDMG, OP_MSH_FPA, `OP_MSH_AMB CARE`, OP_MSW, OP_MSM, OP_NYEE, OP_MSSN, OP_MSQ, OP_NETWORK,
+           ADMIN_DEP_HOSP, ADMIN_RESIDENCY, ADMIN_CLINICAL, RESEARCH_FUNDED, RESEARCH_UNFUNDED, RESEARCH_INTRAMURAL_FUNDED, TEACHING, FINAL_CATEGORY, NOTES) 
+
+
+# jan_effort <- latest_effort %>%
+#   mutate(YEAR = 2025,
+#          MONTH = 01)
+# 
+# feb_effort <- latest_effort %>%
+#   mutate(YEAR = 2025,
+#          MONTH = 02)
+# 
+# mar_effort <- latest_effort %>%
+#   mutate(YEAR = 2025,
+#          MONTH = 03)
+
+# apr_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "04")
+# 
+# may_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "05")
+
+jun_effort <- effort_submission_template %>%
+  mutate(YEAR = "2025",
+         MONTH = "06")
+
+jul_effort <- effort_submission_template %>%
+  mutate(YEAR = "2025",
+         MONTH = "07")
+
+
+monthly_effort_template <- bind_rows(jun_effort, jul_effort)
+monthly_effort_template <- monthly_effort_template %>%
+  arrange(-str_detect(TYPE, 'Physician'), MASTER_DEPT, CPSC_SPECIALTY, PHYSICIAN, YEAR, MONTH)
+
+monthly_effort_template <- monthly_effort_template %>%
+  dplyr::select(MASTER_DEPT, CPSC_SPECIALTY, FINANCIAL_SITE, PHYSICIAN, NPI, LIFE_NUM, BUSINESS_UNIT, HR_DEPARTMENT, HR_PERSON_TYPE, TYPE, TYPE_DETAIL, ADMIN_TITLE,
+           HIRE_DATE, TERM_DATE, YEAR, MONTH,
+           FTE, ADJ_CFTE, CLINICAL, CLINICAL_RESIDENT, SERVICE, SERVICE_RESIDENT, NON_BILLABLE_OFFSITE_CLINICAL, BILLABLE_OFFSITE_CLINICAL,
+           IP, OR, OP_MSBI, OP_MSB, OP_Chelsea, OP_MSUS, OP_MSDMG, OP_MSH_FPA, `OP_MSH_AMB CARE`, OP_MSW, OP_MSM, OP_NYEE, OP_MSSN, OP_MSQ, OP_NETWORK,
+           ADMIN_DEP_HOSP, ADMIN_RESIDENCY, ADMIN_CLINICAL, RESEARCH_FUNDED, RESEARCH_UNFUNDED, RESEARCH_INTRAMURAL_FUNDED, TEACHING, FINAL_CATEGORY, NOTES) %>%
+  mutate(ADJ_CFTE = CLINICAL+CLINICAL_RESIDENT+SERVICE+SERVICE_RESIDENT)
+
+
+month_col_names <- unique(format(sort(as.Date(paste0(paste0(unique(paste0(monthly_effort_template$YEAR,"-",monthly_effort_template$MONTH)),"-01")))), "%b %y"))
+year_col_names <- sort(unique(monthly_effort_template$YEAR))
+
+```
+
+
+```{r Create Lagging Effort Submission Template, echo = FALSE, warning = FALSE, message = FALSE}
+
+# jan_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "01")
+# 
+# feb_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "02")
+# 
+# mar_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "03")
+# 
+# apr_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "04")
+# 
+# may_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "05")
+# 
+# jun_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "06")
+# 
+# jul_effort <- effort_submission_template %>%
+#   mutate(YEAR = "2025",
+#          MONTH = "07")
+# 
+# 
+# monthly_effort_template_multiple <- bind_rows(jan_effort, feb_effort, mar_effort, apr_effort, may_effort)
+# monthly_effort_template_multiple <- monthly_effort_template_multiple %>%
+#   arrange(-str_detect(TYPE, 'Physician'), MASTER_DEPT, CPSC_SPECIALTY, PHYSICIAN, YEAR, MONTH)
+# 
+# monthly_effort_template_multiple <- monthly_effort_template_multiple %>%
+#   dplyr::select(MASTER_DEPT, CPSC_SPECIALTY, FINANCIAL_SITE, PHYSICIAN, NPI, LIFE_NUM, BUSINESS_UNIT, HR_DEPARTMENT, HR_PERSON_TYPE, TYPE, TYPE_DETAIL, ADMIN_TITLE,
+#            HIRE_DATE, TERM_DATE, YEAR, MONTH,
+#            FTE, ADJ_CFTE, CLINICAL, CLINICAL_RESIDENT, SERVICE, SERVICE_RESIDENT, NON_BILLABLE_OFFSITE_CLINICAL, BILLABLE_OFFSITE_CLINICAL,
+#            IP, OR, OP_MSBI, OP_MSB, OP_Chelsea, OP_MSUS, OP_MSDMG, OP_MSH_FPA, `OP_MSH_AMB CARE`, OP_MSW, OP_MSM, OP_NYEE, OP_MSSN, OP_MSQ, OP_NETWORK,
+#            ADMIN_DEP_HOSP, ADMIN_RESIDENCY, ADMIN_CLINICAL, RESEARCH_FUNDED, RESEARCH_UNFUNDED, RESEARCH_INTRAMURAL_FUNDED, TEACHING, FINAL_CATEGORY, NOTES) %>%
+#   mutate(ADJ_CFTE = CLINICAL+CLINICAL_RESIDENT+SERVICE+SERVICE_RESIDENT)
+
+
+```
+
+
+
+
+
+```{r Format Excel Export File, echo = FALSE, warning = FALSE, message = FALSE}
+
+library(openxlsx)
+
+## Data Section
+### Formatting Style 
+provStyle <- createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = TRUE)
+prior_effortStyle <- createStyle(fgFill = "#4F81BD", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+current_effortStyle <- createStyle(fgFill = "#4BACC6", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+prior_percentileStyle <- createStyle(fgFill = "#92D050", textDecoration = "bold", wrapText = TRUE)
+current_percentileStyle <- createStyle(fgFill = "#FFC000", textDecoration = "bold", wrapText = TRUE)
+
+wRVUsStyle <- createStyle(fgFill = "#00aeef", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+collectionsStyle <- createStyle(fgFill = "#d80b8c", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+cfteStyle <- createStyle(fgFill = "#7030a0", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+productivityStyle <- createStyle(fgFill = "#212070", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+# varianceStyle <- createStyle(fgFill = "#ffc000", fontColour  = "#000000", textDecoration = "bold", wrapText = TRUE)
+perwRVUStyle <- createStyle(fgFill = "#a5a7a5", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE)
+
+varTargetStyle <- createStyle(fgFill = "#E97132", textDecoration = "bold", wrapText = TRUE)
+realizedTargetStyle <- createStyle(fgFill = "#92D050", textDecoration = "bold", wrapText = TRUE)
+
+number_format = createStyle(numFmt="#,##0", fontColour  = "#000000")
+decimal_format = createStyle(numFmt="0.00", fontColour  = "#000000")
+dollar_format = createStyle(numFmt="$#,##0", fontColour  = "#000000")
+percent_format = createStyle(numFmt="#,##0%", fontColour  = "#000000")
+# percent_format = createStyle(numFmt="#,##0%", fgFill = "#ECECFA", textDecoration = "bold", borderStyle = "thin", borderColour = "black")
+
+redStyle <- createStyle(bgFill = "#FFC7CE", fontColour = "#9C0006", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "#D9D9D9")
+orangeStyle <- createStyle(bgFill = "#FFEB9C",fontColour = "#9C5700", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "#D9D9D9")
+greenStyle <- createStyle(bgFill = "#C6EFCE", fontColour = "#006100", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "#D9D9D9")
+
+
+## Group Columns for Formatting
+prov_detail_col_group <- c(1:16)
+FTE_col_group <- c(17:18)
+cfte_col_group <- c(19:22)
+non_billable_clinical_col_group <- c(23)
+cfte_site_col_group <- c(24:39)
+admin_col_group <- c(40:42)
+research_col_group <- c(43:46)
+teaching_col_group <- c(47)
+note_col_group <- c(48)
+
+```
+
+
+```{r Format Single Template Output, echo = FALSE, warning = FALSE, message = FALSE}
+
+library(openxlsx)
+
+
+list_master_dept <- as.vector(sort(unique(oracle_updated_merged$MASTER_DEPT)))
+
+template_start <- paste0(month_col_names, collapse = "_")
+
+# i <- "Dermatology"
+
+
+effort_template_function <- function(list_master_dept){
+
+
+  monthly_effort_template_dept <- monthly_effort_template %>% 
+    filter(MASTER_DEPT == i) 
+
+    ## create a workbook and add a worksheet
+  wb <- createWorkbook()
+  
+  addWorksheet(wb, paste0("Allocation of Effort "))
+  
+  
+  ### Data Output 
+  writeDataTable(wb, 1, monthly_effort_template_dept, startRow = 1, startCol = 1, tableStyle = "None", stack = T)
+  
+  ### Provider Detail Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = prov_detail_col_group)
+  
+  groupColumns(wb, 1, cols = c(6:9), hidden = TRUE)
+  
+  ### FTE Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#A02B93", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = FTE_col_group)
+  
+  ### Clinical Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#DAE9F8", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = cfte_col_group)
+  
+  ### Non-Billable Clinical Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FFC000", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = non_billable_clinical_col_group)
+
+  ### CFTE by Site Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FBE2D5", textDecoration = "bold", wrapText = TRUE), 
+          rows = 1,  
+           cols = cfte_site_col_group)
+
+  ### Admin Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#F2CEEF", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = admin_col_group)
+
+  ### Research Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#C1F0C8", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = research_col_group)
+  
+  ### Research Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#CAEDFB", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = teaching_col_group)
+  
+  ### Note Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FFC000", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = note_col_group)
+
+  groupColumns(wb, 1, cols = c(47), hidden = TRUE)
+
+  
+  freezePane(wb, 1, firstActiveRow = 1, firstActiveCol = 5)
+  setColWidths(wb, 1, cols = c(1,2,4), widths = 24)
+  
+  
+  # set zoom
+  set_zoom <- function(x) gsub('(?<=zoomScale=")[0-9]+', x, sV, perl = TRUE)
+  
+  sV <- wb$worksheets[[1]]$sheetViews
+  wb$worksheets[[1]]$sheetViews <- set_zoom(90)
+  
+  
+  
+  
+  # Definitions Tab --------------------------------------------------------------
+  addWorksheet(wb, "Definitions")
+  
+  ## Title Section
+  wb_title <- "Allocation of Effort (CARTS) Definitions"
+  titleStyle <- createStyle(fontSize = 16,
+                            textDecoration = c("bold", "italic"), 
+                            valign = "center")
+  
+  writeData(wb, 2, wb_title, startRow = 1, startCol = 1)
+  addStyle(wb, 2, titleStyle, rows = 1, cols = 1)
+  
+  
+  ### Set Default Column and Row Index
+  
+  month_col_num <- length(month_col_names)
+  year_col_num <- length(year_col_names)
+  
+  row_start <- 3
+  col_start <- 9
+  
+  
+  ### Definitions Table 
+  definitions <- data.frame(
+  Category = c("Clinical", "Clinical With Resident", "Service", "Service With Resident",	"Non-Billable Offsite Clinical Time",
+               "Department/ Hospital Admin",	"Residency Program Admin",	"Clinical Admin",	
+               "Research",
+               # "Research Funded",	"Research Unfunded", "Research Intramurally Funded",
+               "School Teaching"),
+  Definition   = c("Activities related to billable physician patient care. Any clinical services rendered and billed through the Faculty Practice.",
+                   "Activities related to billable patient care with a resident present.",
+                   "Clinical services rendered in Hospital locations for time spent in non-billable direct patient care activities such as Medicaid clinic visits where the professional fees are NOT billed or paid very poorly for services provided.",
+                   "Clinical services rendered in Hospital locations for time spent in non-billable direct patient care activities such as Medicaid clinic visits where the professional fees are NOT billed or paid very poorly for services provided.",
+                   "Activities related to non-billable physician patient care. None of the billing or RVUs roll back to Mount Sinai.",
+                   "Work-effort related to administration of departmental services and programs; school-related administrative services. Work-effort related to administration of hospital related services. Administrative time associated with hospital services (critical care, stroke, etc.) should be defined as Hospital Administrative effort.",
+                   "Any administrative time (with or without an official title) spent supporting the residency program. Administrative time associated with hospital clinic is considered Residency Program Administration time.",
+                   "Clinical non-patient facing activities such as patient charting and patient communications.",
+                   "Time spent executing grant related activities, including effort devoted to; extramurally sponsored research projects; research and/or clinical trial effort which is paid for by an institution budget or philanthropy account; to a sponsored research training program; effort devoted to sponsored clinical trials.",
+                   "Preparation and instruction time related to teaching medical student courses and residency program effort (e.g., Grand Rounds). Time spent with residents performing clinical duties should be classified under clinical or service as appropriate."),
+  Example = c("Time spent in the FPA without a resident present.",
+              "Time spent in the FPA with a resident present.",
+              "Ryan, IMA, inpatient clinics without a resident present.",
+              "Ryan, IMA, inpatient clinics with a resident present.",
+              "Time spent at EHC/QHC, Bronx VA, etc.",
+              "Committee service, FPA quality roles, FPA Medical Director, IRB service, and other departmental services. Hospital-based Quality roles, Medical Directors of labs, clinics, operating rooms, inpatient units, or other hospital-based settings; Medical/Quality Directors (infection control).",
+              "Residency Program Director, Fellowship Program Director (if accredited fellowship program), time spent on Grand Rounds presentations, interviews, resident evaluations, etc. should be included in this time.",
+              "Time spent on charting, EPIC In-Basket Communications, etc.",
+              "Sponsored/not sponsored research training, clinical trials, grant-funded activities.",
+              " ")
+)
+  
+  ### Data Output 
+  writeDataTable(wb, 2, definitions, startRow = 3, startCol = 1, tableStyle = "TableStyleLight9")
+  
+  addStyle(wb, 2, createStyle(wrapText = TRUE),
+           rows = (row_start):(row_start+nrow(definitions)),
+           cols = c(1,2,3), gridExpand = TRUE)
+  
+  setColWidths(wb, 2, cols = c(1), widths = 35)
+  setColWidths(wb, 2, cols = c(2), widths = 60)
+  setColWidths(wb, 2, cols = c(3), widths = 40)
+  
+  
+  # Export Excel Report
+  saveWorkbook(wb, paste0("~/monthly-productivity-file-email/effort-submission-template/Allocation of Effort_",i,"_",template_start,".xlsx"), overwrite = T)
+  # saveWorkbook(wb, paste0("/nfs/data/Applications/Ambulatory/master_productivity_data_dept.xlsx"), overwrite = T)
+  
+  # openXL(wb)
+
+}
+
+```
+
+
+
+```{r Format Single Template Output, echo = FALSE, warning = FALSE, message = FALSE}
+
+library(openxlsx)
+
+
+list_master_dept <- as.vector(sort(unique(oracle_updated_merged$MASTER_DEPT)))
+
+template_start <- paste0(month_col_names, collapse = "_")
+
+# i <- "Urology"
+
+
+effort_template_function <- function(list_master_dept){
+
+
+  monthly_effort_template_dept <- monthly_effort_template_multiple %>% 
+    filter(MASTER_DEPT == i) 
+
+    ## create a workbook and add a worksheet
+  wb <- createWorkbook()
+  
+  addWorksheet(wb, paste0("Allocation of Effort "))
+  
+  
+  ### Data Output 
+  writeDataTable(wb, 1, monthly_effort_template_dept, startRow = 1, startCol = 1, tableStyle = "None", stack = T)
+  
+  ### Provider Detail Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#dddedd", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = prov_detail_col_group)
+  
+  groupColumns(wb, 1, cols = c(6:9), hidden = TRUE)
+  
+  ### FTE Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#A02B93", fontColour  = "#FFFFFF", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = FTE_col_group)
+  
+  ### Clinical Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#DAE9F8", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = cfte_col_group)
+  
+  ### Non-Billable Clinical Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FFC000", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = non_billable_clinical_col_group)
+
+  ### CFTE by Site Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FBE2D5", textDecoration = "bold", wrapText = TRUE), 
+          rows = 1,  
+           cols = cfte_site_col_group)
+
+  ### Admin Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#F2CEEF", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = admin_col_group)
+
+  ### Research Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#C1F0C8", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = research_col_group)
+  
+  ### Research Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#CAEDFB", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = teaching_col_group)
+  
+  ### Note Section ----------------
+  addStyle(wb, 1, createStyle(fgFill = "#FFC000", textDecoration = "bold", wrapText = TRUE), 
+           rows = 1, 
+           cols = note_col_group)
+
+  groupColumns(wb, 1, cols = c(47), hidden = TRUE)
+
+  
+  freezePane(wb, 1, firstActiveRow = 1, firstActiveCol = 5)
+  setColWidths(wb, 1, cols = c(1,2,4), widths = 24)
+  
+  
+  # set zoom
+  set_zoom <- function(x) gsub('(?<=zoomScale=")[0-9]+', x, sV, perl = TRUE)
+  
+  sV <- wb$worksheets[[1]]$sheetViews
+  wb$worksheets[[1]]$sheetViews <- set_zoom(90)
+  
+  
+  
+  
+  # Definitions Tab --------------------------------------------------------------
+  addWorksheet(wb, "Definitions")
+  
+  ## Title Section
+  wb_title <- "Allocation of Effort (CARTS) Definitions"
+  titleStyle <- createStyle(fontSize = 16,
+                            textDecoration = c("bold", "italic"), 
+                            valign = "center")
+  
+  writeData(wb, 2, wb_title, startRow = 1, startCol = 1)
+  addStyle(wb, 2, titleStyle, rows = 1, cols = 1)
+  
+  
+  ### Set Default Column and Row Index
+  
+  month_col_num <- length(month_col_names)
+  year_col_num <- length(year_col_names)
+  
+  row_start <- 3
+  col_start <- 9
+  
+  
+  ### Definitions Table 
+  definitions <- data.frame(
+  Category = c("Clinical", "Clinical With Resident", "Service", "Service With Resident",	"Non-Billable Offsite Clinical Time",
+               "Department/ Hospital Admin",	"Residency Program Admin",	"Clinical Admin",	
+               "Research",
+               # "Research Funded",	"Research Unfunded", "Research Intramurally Funded",
+               "School Teaching"),
+  Definition   = c("Activities related to billable physician patient care. Any clinical services rendered and billed through the Faculty Practice.",
+                   "Activities related to billable patient care with a resident present.",
+                   "Clinical services rendered in Hospital locations for time spent in non-billable direct patient care activities such as Medicaid clinic visits where the professional fees are NOT billed or paid very poorly for services provided.",
+                   "Clinical services rendered in Hospital locations for time spent in non-billable direct patient care activities such as Medicaid clinic visits where the professional fees are NOT billed or paid very poorly for services provided.",
+                   "Activities related to non-billable physician patient care. None of the billing or RVUs roll back to Mount Sinai.",
+                   "Work-effort related to administration of departmental services and programs; school-related administrative services. Work-effort related to administration of hospital related services. Administrative time associated with hospital services (critical care, stroke, etc.) should be defined as Hospital Administrative effort.",
+                   "Any administrative time (with or without an official title) spent supporting the residency program. Administrative time associated with hospital clinic is considered Residency Program Administration time.",
+                   "Clinical non-patient facing activities such as patient charting and patient communications.",
+                   "Time spent executing grant related activities, including effort devoted to; extramurally sponsored research projects; research and/or clinical trial effort which is paid for by an institution budget or philanthropy account; to a sponsored research training program; effort devoted to sponsored clinical trials.",
+                   "Preparation and instruction time related to teaching medical student courses and residency program effort (e.g., Grand Rounds). Time spent with residents performing clinical duties should be classified under clinical or service as appropriate."),
+  Example = c("Time spent in the FPA without a resident present.",
+              "Time spent in the FPA with a resident present.",
+              "Ryan, IMA, inpatient clinics without a resident present.",
+              "Ryan, IMA, inpatient clinics with a resident present.",
+              "Time spent at EHC/QHC, Bronx VA, etc.",
+              "Committee service, FPA quality roles, FPA Medical Director, IRB service, and other departmental services. Hospital-based Quality roles, Medical Directors of labs, clinics, operating rooms, inpatient units, or other hospital-based settings; Medical/Quality Directors (infection control).",
+              "Residency Program Director, Fellowship Program Director (if accredited fellowship program), time spent on Grand Rounds presentations, interviews, resident evaluations, etc. should be included in this time.",
+              "Time spent on charting, EPIC In-Basket Communications, etc.",
+              "Sponsored/not sponsored research training, clinical trials, grant-funded activities.",
+              " ")
+)
+  
+  ### Data Output 
+  writeDataTable(wb, 2, definitions, startRow = 3, startCol = 1, tableStyle = "TableStyleLight9")
+  
+  addStyle(wb, 2, createStyle(wrapText = TRUE),
+           rows = (row_start):(row_start+nrow(definitions)),
+           cols = c(1,2,3), gridExpand = TRUE)
+  
+  setColWidths(wb, 2, cols = c(1), widths = 35)
+  setColWidths(wb, 2, cols = c(2), widths = 60)
+  setColWidths(wb, 2, cols = c(3), widths = 40)
+  
+  
+  # Export Excel Report
+  saveWorkbook(wb, paste0("~/monthly-productivity-file-email/effort-submission-template-multiple/Allocation of Effort_",i,"_Jan 25_May 25",".xlsx"), overwrite = T)
+  # saveWorkbook(wb, paste0("/nfs/data/Applications/Ambulatory/master_productivity_data_dept.xlsx"), overwrite = T)
+  
+  # openXL(wb)
+
+}
+
+```
+
+
+
+```{r Department Excel Export Physicians, echo = FALSE, warning = FALSE, message = FALSE}
+
+for (i in list_master_dept) {
+  effort_template_function(i)
+}
+
+# for (i in list_master_dept_missing) {
+#   multiple_effort_template_function(i)
+# }
+
+```
+
+
+
+

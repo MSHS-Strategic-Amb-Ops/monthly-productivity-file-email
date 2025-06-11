@@ -3,13 +3,22 @@ title: "Email Document"
 output: blastula::blastula_email
 ---
 
-Good morning,
- 
-Please find attached the latest physician productivity data.
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
 
+Good afternoon [Chair Name],
 
+Thank you for your support in helping us build a centralized repository for our Physician & APP Allocation of Effort. Please see attached the final 2024 Productivity report. 
+As a follow up to the announcement during the Administrator's Forum, we've attached the template request for 2025 allocation of effort. Note, due to the timing of this request, we've included, January, February, & March allocation of effort requests into the template. If possible, please mark in red any allocation of effort changes from 2024 by *Monday, 3/24.*
+
+`r table_to_email_yearly`
+
+Please let us know if you have any questions.
+
+Thank you as always for your partnership.
  
-<!-- This week's report-out schedule can be found here:   -->
-<!-- [Report-out Schedule](https://mtsinai.sharepoint.com/:x:/r/sites/Downtown-StrategicIniatitives/Shared%20Documents/General/01.%20MSHS/PI/2023/MSHS%20Huddle/System%20Huddle%20Calendar.xlsx?d=w7a4bdb7fbf0c4e4a8391b83375b34076&csf=1&web=1&e=BOMwPZ). -->
- 
-Thank you 

@@ -3,7 +3,6 @@ title: "monthly-productivity-file-email"
 output: html_document
 ---
 
-
 ```{r setup, include=FALSE}
 
 library(blastula)
@@ -14,50 +13,618 @@ library(lubridate)
 ```
 
 
-```{r processing, include = FALSE}
+```{r Report Criteria, include = FALSE}
 
-# source("Scripts/pull_and_process_monthly.R", local = knitr::knit_global())
+# report_date <- format(Sys.Date() - months(1), "%B %Y")
+report_date <- "2025"
+
 ```
 
-```{r pressure, echo=FALSE}
 
-
-report_date <- format(Sys.Date() - months(1), "%B %Y")
-
-email_credential_location <- "/SharedDrive/deans/Presidents/HSPI-PM/Operations Analytics and Optimization/Administrative/Workgroups/R Workbench/Working Area/Data Connections/email_creds"
-cc_list <- c("soyoun.kweon@mssm.edu"
-             )
-send_list <- c("soyoun.kweon@mssm.edu"
-  )
-
-email_subject <- glue("Master Physician Productivity - {report_date}")
+```{r send list, include = FALSE}
 
 sinai_logo <- add_image(file = "www/Mount_Sinai_Logo_H.png",
                         width = 300)
 
-# Generate the footer text
-footer_text <- glue("Physician Productivity Data for {report_date}.")
+email_credential_location <- "/SharedDrive/deans/Presidents/HSPI-PM/Operations Analytics and Optimization/Administrative/Workgroups/R Workbench/Working Area/Data Connections/email_creds"
 
 
-##Use blastula to construct email to send
-compose_email(header = sinai_logo,
-              body = render_email("Scripts/email_body.Rmd")$html_html,
-              footer = footer_text) %>%
-  add_attachment(
-    # file = "/nfs/data/Applications/Ambulatory/system_huddle_report.html",
-    # filename = paste0("System Huddle Report_2022_2023",".html")) %>%    
-    file = "/nfs/data/Applications/Ambulatory/master_productivity_data.xlsx",
-    filename = paste0("Master Physician Productivity Data_", report_date,".xlsx")) %>%
-  purrr::list_modify(html_str =
-                       .$html_str %>%
-                       stringr::str_replace_all(pattern = "(?i)#f6f6f6",
-                                                replacement = "#FFFFFF")) %>%
-  smtp_send(
-    from = "soyoun.kweon@mssm.edu",
-    to = send_list,
-    cc = cc_list,
-    credentials = creds_file(file = email_credential_location),
-    subject = email_subject
-  ) 
 
 ```
+
+
+```{r Process Monthly Productivity Data, include = FALSE}
+
+# rmarkdown::render("master-productivity-file-processing.Rmd")
+
+```
+
+
+
+```{r Department Distribution List, include = FALSE}
+ 
+# list_master_dept <- as.vector(sort(unique(productivity_output_merged$MASTER_DEPT)))
+list_master_dept <- c(
+                      # "Anesthesiology",
+                      "Breast Surgery",
+                      "Cancer",
+                      "Cardiology",
+                      "Cardiovascular Surgery",
+                      # "Critical Care",
+                      # "Dentistry",
+                      "Dermatology",
+                      # "Emergency Medicine",
+                      # "Environmental Medicine and Climate Science",
+                      # "Family Medicine & Community Health",
+                      # "Genetics",
+                      "Geriatrics",
+                      # "Global Health",
+                      # "ICCM",
+                      # "Medical Education",
+                      "Medicine",
+                      # "MSB",
+                      "MSDMG",
+                      # "MSQ",
+                      # "MSSN",
+                      "Network",
+                      # "Neurology",
+                      "Neurosurgery",
+                      "OBGYN",
+                      "Ophthalmology",
+                      "Orthopaedics",
+                      "Otolaryngology",
+                      # "Pathology",
+                      "Pediatrics",
+                      # "Pharmacological Sciences",
+                      # "Population Health Science and Policy",
+                      # "Psychiatry",
+                      # "Public Health",
+                      # "Radiation Oncology",
+                      # # "Radiology",
+                      "Rehab Medicine",
+                      "Surgery",
+                      "Thoracic Surgery",
+                      "Transplant",
+                      "Urology"
+                      )
+
+list_master_dept_missing <- c(
+                      # "Anesthesiology",
+                      # "Breast Surgery",
+                      # "Cancer"
+                      # "Cardiology",
+                      # "Cardiovascular Surgery",
+                      # "Critical Care",
+                      # "Dentistry",
+                      # "Dermatology",
+                      # "Emergency Medicine",
+                      # "Environmental Medicine and Climate Science",
+                      # "Family Medicine & Community Health",
+                      # "Genetics",
+                      # "Geriatrics",
+                      # "Global Health"
+                      # "ICCM",
+                      # "Medical Education",
+                      # "Medicine",
+                      # "MSB",
+                      # "MSDMG",
+                      # "MSQ",
+                      # "MSSN",
+                      # "Network",
+                      "Neurology"
+                      # "Neurosurgery",
+                      # "OBGYN",
+                      # "Ophthalmology",
+                      # "Orthopaedics",
+                      # "Otolaryngology",
+                      # "Pathology",
+                      # "Pediatrics",
+                      # "Pharmacological Sciences",
+                      # "Population Health Science and Policy",
+                      # "Psychiatry",
+                      # "Public Health",
+                      # "Radiation Oncology",
+                      # # "Radiology",
+                      # "Rehab Medicine",
+                      # "Surgery",
+                      # "Thoracic Surgery",
+                      # "Transplant",
+                      # "Urology"
+                      )
+
+list_master_dept_missing_dt <- as.data.frame(list_master_dept_missing)
+
+
+
+```
+
+
+```{r Ouput including All Departments, include = FALSE}
+
+
+  
+  email_subject <- glue("Master Physician Productivity {report_date}")
+  footer_text <- glue("Master Physician Productivity {report_date}")
+  
+  
+  ## Summarize YTD Productivity by Group  --------------------------------------
+  master_productivity_summary_ytd <- productivity_output_export_physicians %>%
+    filter(is.na(`Term Date`) | as.Date(`Term Date`, "%m/%d/%Y") >= report_start_date) %>%
+    filter(`Master Dept` %in% list_master_dept) %>%
+    ungroup() %>%
+    filter(!is.na(`Master Dept`)) %>%
+    # filter(!is.na(CPSC_SPECIALTY)) %>%
+    select(`Master Dept`, contains("Productivity YTD")) %>%
+    select(`Master Dept`, contains(ytd_year))
+  
+  
+  ## Count Physicians by Productivity Range
+  master_productivity_summary_ytd <- master_productivity_summary_ytd %>%
+    pivot_longer(2:length(master_productivity_summary_ytd),
+                 names_to = "Year",
+                 values_to = "Productivity") %>%
+    mutate(group = case_when(is.na(Productivity) ~ "N/A",
+                             Productivity <0.25 ~ "<P25",
+                             Productivity >= 0.25 & Productivity <0.5 ~ "P25-49",
+                             Productivity >= 0.5 & Productivity <0.75 ~ "P50-74",
+                             TRUE ~ "P75 or Above")) %>%
+    group_by(`Master Dept`, Year, group) %>%
+    summarise(total = n()) %>%
+    pivot_wider(names_from = c("group"),
+                values_from = total) 
+  
+  
+  ## Add Missing Departments 
+  master_productivity_summary_ytd <- rbind.fill(master_productivity_summary_ytd, as.data.frame(list_master_dept_missing))
+  master_productivity_summary_ytd <- master_productivity_summary_ytd  %>%
+    mutate(`Master Dept` = ifelse(is.na(`Master Dept`), list_master_dept_missing, `Master Dept`),
+           Year = ifelse(is.na(Year), min(master_productivity_summary_ytd$Year, na.rm = T), Year)) %>%
+    dplyr::select(-list_master_dept_missing) %>%
+    arrange(`Master Dept`)
+    
+  
+  ## Get Total Row 
+  master_productivity_summary_ytd <- master_productivity_summary_ytd %>%
+    adorn_totals("row")
+  
+  master_productivity_summary_ytd[is.na(master_productivity_summary_ytd)] <- 0
+  
+  
+  nms <- c("Master Dept", "Year", "<P25", "P25-49", "P50-74", "P75 or Above", "N/A")
+  Missing <- setdiff(nms, names(master_productivity_summary_ytd))  # Find names of missing columns
+  master_productivity_summary_ytd[Missing] <- 0                    # Add them, filled with '0's
+  master_productivity_summary_ytd <- master_productivity_summary_ytd[nms]                       
+  
+  
+  
+  ## Summarize Yearly Productivity by Group  -----------------------------------
+  master_productivity_summary_year <- productivity_output_export_physicians %>%
+    filter(is.na(`Term Date`) | as.Date(`Term Date`, "%m/%d/%Y") >= report_start_date) %>%
+    filter(`Master Dept` %in% list_master_dept) %>%
+    ungroup() %>%
+    filter(!is.na(`Master Dept`)) %>%
+    # filter(!is.na(CPSC_SPECIALTY)) %>%
+    select(`Master Dept`, contains("Productivity 20")) %>%
+    select(`Master Dept`, contains(ytd_year)) 
+  
+  
+  ## Count Physicians by Productivity Range
+  master_productivity_summary_year <- master_productivity_summary_year %>%
+    pivot_longer(2:length(master_productivity_summary_year),
+                 names_to = "Year",
+                 values_to = "Productivity") %>%
+    mutate(group = case_when(is.na(Productivity) ~ "N/A",
+                             Productivity <0.25 ~ "<P25",
+                             Productivity >= 0.25 & Productivity <0.5 ~ "P25-49",
+                             Productivity >= 0.5 & Productivity <0.75 ~ "P50-74",
+                             TRUE ~ "P75 or Above")) %>%
+    group_by(`Master Dept`, Year, group) %>%
+    summarise(total = n()) %>%
+    pivot_wider(names_from = group,
+                values_from = total)
+  
+    
+  ## Add Missing Departments 
+  master_productivity_summary_year <- rbind.fill(master_productivity_summary_year, as.data.frame(list_master_dept_missing))
+  master_productivity_summary_year <- master_productivity_summary_year  %>%
+    mutate(`Master Dept` = ifelse(is.na(`Master Dept`), list_master_dept_missing, `Master Dept`),
+           Year = ifelse(is.na(Year), min(master_productivity_summary_year$Year, na.rm = T), Year)) %>%
+    dplyr::select(-list_master_dept_missing) %>%
+    arrange(`Master Dept`)
+    
+  
+  ## Get Total Row 
+  master_productivity_summary_year <- master_productivity_summary_year %>%
+    adorn_totals("row")
+  
+  master_productivity_summary_year[is.na(master_productivity_summary_year)] <- 0
+  
+  
+  nms <- c("Master Dept", "Year", "<P25", "P25-49", "P50-74", "P75 or Above", "N/A")
+  Missing <- setdiff(nms, names(master_productivity_summary_year))  # Find names of missing columns
+  master_productivity_summary_year[Missing] <- 0                    # Add them, filled with '0's
+  master_productivity_summary_year <- master_productivity_summary_year[nms] 
+  
+  
+  
+  ## Create YTD Productivity Summary Table for Email Body
+  table_to_email_ytd <- knitr::kable(
+    x = master_productivity_summary_ytd,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year)),
+                     font_size = 14) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 12) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1, width = "40em", bold=T) %>%
+    column_spec(2, width = "60em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    row_spec(which(master_productivity_summary_year$`Master Dept` %in% list_master_dept_missing), background = "#FAA0A0") %>%
+    row_spec(which(master_productivity_summary_year$`Master Dept` == "Total"), background = "#D3D3D3") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+  
+  
+  ## Create Yearly Productivity Summary Table for Email Body
+  table_to_email_yearly <- knitr::kable(
+    x = master_productivity_summary_year,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year)),
+                     font_size = 14) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 12) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1, width = "40em", bold=T) %>%
+    column_spec(2, width = "60em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    row_spec(which(master_productivity_summary_year$`Master Dept` %in% list_master_dept_missing), background = "#FAA0A0") %>%
+    row_spec(which(master_productivity_summary_year$`Master Dept` == "Total"), background = "#D3D3D3") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+    
+  
+  
+
+  ## Prepare email listserv 
+  # send_list <- (listserv %>% filter(MASTER_DEPT == "All"))$EMAIL
+  send_list <- "soyoun.kweon@mssm.edu"
+  
+  cc_list <- c("soyoun.kweon@mssm.edu")
+  
+  
+  ##Use blastula to construct email to send
+  compose_email(content_width = "1500px",
+                header = sinai_logo,
+                # body = render_email("Scripts/email_body.Rmd")$html_html,
+                body = blastula::md(
+                  c(
+                    "<p style='font-family: calibri, serif; font-size:12pt;'> 
+                    Good morning,
+                    </br></br>
+                    Please find attached the latest Master Physician Productivity Report.</br>
+                    Table below summarizes YTD productivity by department. Productivity is not generated for<span style='color: red; font-style:italic'> 
+                    departments in red</span> 
+                    due to missing information.</br></br></p>", 
+                    table_to_email_ytd,
+                    "</br><p style='font-family: calibri, serif; font-size:12pt;'>Please let us know if you have any questions.</p>",
+                    "<p style='font-family: calibri, serif; font-size:12pt;'>Thank you</p></br>"
+                    )),
+                footer = footer_text) %>%
+    add_attachment(
+      file = paste0("/home/skweon2/monthly-productivity-file-email/master-files/Master Physician Productivity Data_",
+                          month_col_names[length(month_col_names)],".xlsx"),
+      filename = paste0("Master Physician Productivity - ", month_col_names[length(month_col_names)], ".xlsx")
+      
+      ) %>%
+    purrr::list_modify(html_str =
+                         .$html_str %>%
+                         stringr::str_replace_all(pattern = "(?i)#f6f6f6",
+                                                  replacement = "#FFFFFF")) %>%
+    smtp_send(
+      from = "soyoun.kweon@mssm.edu",
+      to = send_list,
+      cc = cc_list,
+      credentials = creds_file(file = email_credential_location),
+      subject = email_subject
+    ) 
+
+```
+
+
+
+```{r Ouput by Department, include = FALSE}
+
+i <- "Medicine"
+
+
+email_output_function <- function(list_master_dept){
+  
+  email_subject <- glue("Physician Productivity {report_date} - {i}")
+  footer_text <- glue("Physician Productivity {report_date} - {i}")
+  
+  # file = readWorkbook("Master Physician Productivity Data_Dermatology_Dec 24.xlsx")
+  
+  master_productivity_summary_ytd_dept <- master_productivity_summary_ytd %>% filter(`Master Dept` == i)
+  master_productivity_summary_year_dept <- master_productivity_summary_year %>% filter(`Master Dept` == i)
+  
+  
+  ## Create YTD Productivity Summary Table for Email Body
+  table_to_email_ytd_dept <- knitr::kable(
+    x = master_productivity_summary_ytd_dept,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year_dept))) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 13) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1, width = "40em", bold=T) %>%
+    column_spec(2, width = "60em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year_dept),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+  
+  
+  ## Create Yearly Productivity Summary Table for Email Body
+  table_to_email_yearly <- knitr::kable(
+    x = master_productivity_summary_year_dept,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year_dept))) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 13) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1, width = "40em", bold=T) %>%
+    column_spec(2, width = "60em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year_dept),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+    
+# table_to_email_yearly %>% filter(`Master Dept` == "Breast Surgery")
+
+  ## Prepare email listserv 
+  # send_list <- (listserv %>% filter(MASTER_DEPT == "All"))$EMAIL
+  send_list <- c("soyoun.kweon@mssm.edu"
+                 # "leonarda.parente@mssm.edu"
+                 )
+  
+  cc_list <- c("soyoun.kweon@mssm.edu")
+  
+  
+  ##Use blastula to construct email to send
+  compose_email(content_width = "1800px",
+                header = sinai_logo,
+                # body = render_email(content_width = "2000px","Scripts/email_body.Rmd")$html_html,
+                body = blastula::md(
+                  c(
+                    "<p style='font-family: calibri, serif; font-size:12pt;'>
+                    Good afternoon, 
+                    </br></br>
+                    Please see attached the following:</br><p>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>January - March 2025 Productivity Report</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>April & May Allocation of Effort (please send any edits in <span style='color:#FF0000'>red</span> to Effort_Allocation@mssm.edu for completion by May 20th)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please note, if the template completion is delayed you may not receive productivity reporting for that respective month.</br></br></p></li></ul>",
+                    
+                    table_to_email_ytd_dept,
+                    "</br></br>",
+                    
+                    "<p style='font-family: calibri, serif; font-size:12pt;'><u><strong>Template Submission Guidelines:</br></strong></u></p>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>FTE and allocation of effort should be pro-rated for LOA/FMLA. For example, if a provider is on LOA in February, FTE and allocation of Effort should reflect 0.</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Clinical, administrative, research, and teaching effort should add up to Total FTE (column S-W & column AN-AT)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Any on/off-site non-billable activities shouldd be assigned to Non Billable Offsite Clinical (column W)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Billable clinical effort by site (Column X-AM) should add up to total billable clinical effort (columns S-V)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please fill out any missing fields (e.g. CPSC Specialty, Hire Date, Term Date)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>For any new hires, please add them to the bottom of the template</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please include all APP's in this template for full accuracy</p></li></ul>"
+                    )),
+                footer = footer_text) %>%
+    add_attachment(
+      file = paste0("/home/skweon2/monthly-productivity-file-email/department-files/Master Physician Productivity Data_",i,"_",
+                          month_col_names[length(month_col_names)],".xlsx"),
+      filename = paste0("Physician Productivity ",i," - ", month_col_names[length(month_col_names)], ".xlsx")
+      
+      ) %>%
+    add_attachment(
+      file = paste0("/home/skweon2/monthly-productivity-file-email/effort-submission-template/Allocation of Effort_",i,"_",template_start,".xlsx"),
+      filename = paste0("Allocation of Effort ",i, " - ", template_start,".xlsx")
+      ) %>%
+    purrr::list_modify(html_str =
+                         .$html_str %>%
+                         stringr::str_replace_all(pattern = "(?i)#f6f6f6",
+                                                  replacement = "#FFFFFF")) %>%
+    smtp_send(
+      from = "soyoun.kweon@mssm.edu",
+      to = send_list,
+      cc = cc_list,
+      credentials = creds_file(file = email_credential_location),
+      subject = email_subject
+    ) 
+}
+
+
+
+```
+
+
+
+```{r Department Email Output, echo = FALSE, warning = FALSE, message = FALSE}
+
+for (i in list_master_dept) {
+  email_output_function(i)
+}
+
+```
+
+
+
+```{r Ouput by Department Data Missing, include = FALSE}
+
+i <- "Urology"
+
+
+email_output_function_missing <- function(list_master_dept){
+  
+  email_subject <- glue("Physician Productivity {report_date} - {i}")
+  footer_text <- glue("Physician Productivity {report_date} - {i}")
+  
+  # file = readWorkbook("Master Physician Productivity Data_Dermatology_Dec 24.xlsx")
+  
+  master_productivity_summary_ytd_dept <- master_productivity_summary_ytd %>% filter(`Master Dept` == i)
+  master_productivity_summary_year_dept <- master_productivity_summary_year %>% filter(`Master Dept` == i)
+  
+  
+  ## Create YTD Productivity Summary Table for Email Body
+  table_to_email_ytd_dept <- knitr::kable(
+    x = master_productivity_summary_ytd_dept,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year_dept))) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 13) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1:2, width = "40em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year_dept),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    row_spec(which(master_productivity_summary_ytd_dept$`Master Dept` %in% list_master_dept_missing), background = "#FAA0A0") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+  
+  
+  ## Create Yearly Productivity Summary Table for Email Body
+  table_to_email_yearly <- knitr::kable(
+    x = master_productivity_summary_year_dept,
+    align=c('llccccc'), 
+    format = "html") %>%
+    add_header_above(c("Physician Productivity Summary" = length(master_productivity_summary_year_dept))) %>%
+    kable_styling(full_width = FALSE,
+                            position = "center", row_label_position = "c", font_size = 13) %>%
+    # kable_classic(full_width = F, html_font = "Calibri") %>%
+    row_spec(0,  background = "#212070", color = "white") %>%
+    column_spec(1:2, width = "40em", bold=T) %>%
+    column_spec(3:length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    column_spec(length(master_productivity_summary_year_dept), width = "15em", bold=T, extra_css = "border-right 1px solid #E8E8E8;") %>%
+    row_spec(1:nrow(master_productivity_summary_year_dept),
+             extra_css = "padding: 7px; border-bottom: 1px solid #E8E8E8;") %>%
+    row_spec(which(master_productivity_summary_year_dept$`Master Dept` %in% list_master_dept_missing), background = "#FAA0A0") %>%
+    kableExtra::footnote(general_title = "Note:",
+                       general = "N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.",
+                       threeparttable = TRUE,
+                       footnote_as_chunk = TRUE,
+                       fixed_small_size = TRUE)
+    # add_footnote("N/A reflects physicians with one or more physician details (e.g. Benchmarking Specialty, CFTE, etc.) required to calculate productivity.", notation = "symbol")
+    # scroll_box(width = "500px", height = "200px")
+    
+# table_to_email_yearly %>% filter(`Master Dept` == "Breast Surgery")
+
+  ## Prepare email listserv 
+  # send_list <- (listserv %>% filter(MASTER_DEPT == "All"))$EMAIL
+  send_list <- c("soyoun.kweon@mssm.edu",
+                 "leonarda.parente@mssm.edu"
+                 )
+  
+  cc_list <- c("soyoun.kweon@mssm.edu")
+  
+  
+  ##Use blastula to construct email to send
+  compose_email(content_width = "1800px",
+                header = sinai_logo,
+                # body = render_email(content_width = "2000px","Scripts/email_body.Rmd")$html_html,
+                body = blastula::md(
+                  c(
+                    "<p style='font-family: calibri, serif; font-size:12pt;'>
+                    Good afternoon, 
+                    </br></br></p>",
+                    "<p style='font-family: calibri, serif; font-size:12pt;'><strong><i>
+                    We are unable to provide YTD Physician Productivity Report because the allocation of effort data was not submitted.</i></strong></br></p>",
+                    
+                    "<p style='font-family: calibri, serif; font-size:12pt;'>
+                    Please see attached the following:</br><p>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>January-May Allocation of Effort (please send any edits in <span style='color:#FF0000'>red</span> to Effort_Allocation@mssm.edu for completion by May 20th)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please note, if the template completion is delayed you may not receive productivity reporting for that respective month.</br></br></p></li></ul>",
+                    
+                    table_to_email_ytd_dept,
+                    "</br></br>",
+                    
+                    "<p style='font-family: calibri, serif; font-size:12pt;'><u><strong>Template Submission Guidelines:</br></strong></u></p>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>FTE and allocation of effort should be pro-rated for LOA/FMLA. For example, if a provider is on LOA in February, FTE and allocation of Effort should reflect 0.</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Clinical, administrative, research, and teaching effort should add up to Total FTE (column S-W & column AN-AT)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Any on/off-site non-billable activities shouldd be assigned to Non Billable Offsite Clinical (column W)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Billable clinical effort by site (Column X-AM) should add up to total billable clinical effort (columns S-V)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please fill out any missing fields (e.g. CPSC Specialty, Hire Date, Term Date)</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>For any new hires, please add them to the bottom of the template</p></li></ul>",
+                    "<ul><li><p style='font-family: calibri, serif; font-size:11pt;'>Please include all APP's in this template for full accuracy</p></li></ul>"
+                    )),
+                footer = footer_text) %>%
+    # add_attachment(
+    #   file = paste0("/home/skweon2/monthly-productivity-file-email/department-files/Master Physician Productivity Data_",i,"_",
+    #                       month_col_names[length(month_col_names)],".xlsx"),
+    #   filename = paste0("Physician Productivity ",i," - ", month_col_names[length(month_col_names)], ".xlsx")
+    #   
+    #   ) %>%
+    add_attachment(
+      file = paste0("/home/skweon2/monthly-productivity-file-email/effort-submission-template/Allocation of Effort_",i,"_Jan 25_May 25.xlsx"),
+      filename = paste0("Allocation of Effort ",i, " - ", template_start,".xlsx")
+      ) %>%
+    purrr::list_modify(html_str =
+                         .$html_str %>%
+                         stringr::str_replace_all(pattern = "(?i)#f6f6f6",
+                                                  replacement = "#FFFFFF")) %>%
+    smtp_send(
+      from = "soyoun.kweon@mssm.edu",
+      to = send_list,
+      cc = cc_list,
+      credentials = creds_file(file = email_credential_location),
+      subject = email_subject
+    ) 
+}
+
+
+
+```
+
+
